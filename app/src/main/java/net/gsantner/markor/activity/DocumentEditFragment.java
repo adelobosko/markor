@@ -757,11 +757,6 @@ public class DocumentEditFragment extends GsFragmentBase implements TextFormat.T
         return getActivity() instanceof MainActivity;
     }
 
-    private void hideSoftKeyboard() {
-        _hlEditor.postDelayed(() -> new ActivityUtils(getActivity()).hideSoftKeyboard().freeContextRef(), 300);
-        _hlEditor.clearFocus();
-    }
-
     @Override
     public void onSaveInstanceState(@NonNull Bundle outState) {
         saveDocument();
