@@ -9,6 +9,8 @@
 #########################################################*/
 package net.gsantner.markor.activity;
 
+import android.animation.Animator;
+import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.appwidget.AppWidgetManager;
@@ -64,6 +66,7 @@ import net.gsantner.opoc.preference.FontPreferenceCompat;
 import net.gsantner.opoc.ui.FilesystemViewerData;
 import net.gsantner.opoc.util.ActivityUtils;
 import net.gsantner.opoc.util.CoolExperimentalStuff;
+import net.gsantner.opoc.util.StringUtils;
 import net.gsantner.opoc.util.TextViewUndoRedo;
 
 import java.io.File;
@@ -677,33 +680,77 @@ public class DocumentEditFragment extends GsFragmentBase implements TextFormat.T
     }
 
     public void saveDocumentPositions() {
-        if (!Arrays.asList(_hlEditor, _webView, _document.getFile()).contains(null)) {
+        final String path = getPath();
+        if (!Arrays.asList(_hlEditor, _webView, path).contains(null)) {
             if (_isPreviewVisible) {
-                _appSettings.setLastViewPosition(_document.getFile(), _webView.getScrollX(), _webView.getScrollY());
+                _appSettings.setLastViewPosition(path, _webView.getScrollX(), _webView.getScrollY());
             } else {
-                _appSettings.setLastEditPosition(_document.getFile(), _hlEditor.getSelectionStart());
+                _appSettings.setLastEditPosition(path, _hlEditor.getSelectionStart());
             }
         }
     }
 
     public void restoreDocumentPositions() {
-        if (!Arrays.asList(_hlEditor, _webView, _document.getFile()).contains(null) && !isTodoOrQuickNote()) {
+        final String path = getPath();
+        if (!Arrays.asList(_hlEditor, _webView, path).contains(null) && !isTodoOrQuickNote()) {
             int v;
             if ((v = _document.getInitialLineNumber()) >= 0) { // If Intent contains line number, jump to it
-                _hlEditor.smoothMoveCursorToLine(v);
+                final int end = StringUtils.getIndexFromLineOffset(_hlEditor.getText(), v, 0);
+                smoothMoveCursor(0, end, false, -1, -1);
             } else { // otherwise take settings
                 if (_isPreviewVisible) {
-                    _webView.scrollAnimatedToXY(_appSettings.getLastViewPositionX(_document.getFile()), _appSettings.getLastViewPositionY(_document.getFile()));
-                    hideSoftKeyboard();
+                    _webView.scrollAnimatedToXY(_appSettings.getLastViewPositionX(path), _appSettings.getLastViewPositionY(path));
                 } else {
-                    if ((v = _appSettings.isEditorStartOnBottom() ? _hlEditor.length() : _appSettings.getLastEditPositionChar(_document.getFile())) > 0) {
-                        _hlEditor.smoothMoveCursor(0, v);
-                        showSoftKeyboard();
+                    if (_appSettings.isEditorStartOnBottom()) {
+                        v = _hlEditor.length();
+                    } else {
+                        v = _appSettings.getLastEditPosition(path);
+                    }
+                    if (v >= 0) {
+                        smoothMoveCursor(0, v, true, -1, -1);
                     }
                 }
             }
             _document.setInitialLineNumber(-1);
         }
+    }
+
+    public void smoothMoveCursor(int startIndex, int endIndex, boolean showSip, int delay, int duration) {
+        final ObjectAnimator anim = ObjectAnimator.ofInt(_hlEditor, "selection", startIndex, endIndex);
+        anim.setDuration(duration > 0 ? duration : 400);
+        final ActivityUtils utils = new ActivityUtils(getActivity());
+
+        if (showSip) {
+            anim.addListener(new Animator.AnimatorListener() {
+                @Override
+                public void onAnimationStart(Animator animation) {
+                    // ignored
+                }
+
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    utils.showSoftKeyboard().freeContextRef();
+                }
+
+                @Override
+                public void onAnimationCancel(Animator animation) {
+                    // ignored
+                }
+
+                @Override
+                public void onAnimationRepeat(Animator animation) {
+                    // ignored
+                }
+            });
+        }
+
+        _hlEditor.postDelayed(() -> {
+            if (!_hlEditor.hasFocus()) {
+                _hlEditor.requestFocus();
+            }
+
+            anim.start();
+        }, delay > 0 ? delay : 400);
     }
 
     private boolean isTodoOrQuickNote() {
@@ -713,10 +760,6 @@ public class DocumentEditFragment extends GsFragmentBase implements TextFormat.T
     private void hideSoftKeyboard() {
         _hlEditor.postDelayed(() -> new ActivityUtils(getActivity()).hideSoftKeyboard().freeContextRef(), 300);
         _hlEditor.clearFocus();
-    }
-
-    private void showSoftKeyboard() {
-        _hlEditor.postDelayed(() -> new ActivityUtils(getActivity()).showSoftKeyboard().freeContextRef(), 300);
     }
 
     @Override
@@ -758,8 +801,7 @@ public class DocumentEditFragment extends GsFragmentBase implements TextFormat.T
         if (isVisibleToUser && isTodoOrQuickNote()) {
             checkReloadDisk(false);
             if (_hlEditor != null && !_isPreviewVisible) {
-                _hlEditor.smoothMoveCursor(0, _hlEditor.length());
-                showSoftKeyboard();
+                smoothMoveCursor(0, _hlEditor.length(), false, -1, -1);
             }
         } else if (!isVisibleToUser && _document != null) {
             saveDocument();
