@@ -308,6 +308,7 @@ public class HighlightingEditor extends AppCompatEditText {
     }
 
     public void smoothMoveCursor(final int startIndex, final int endIndex, int duration, Runnable after) {
+
         if (!hasFocus()) {
             requestFocus();
         }
@@ -323,7 +324,7 @@ public class HighlightingEditor extends AppCompatEditText {
                 }
             });
         }
-        anim.start();
+        postDelayed(anim::start, 300);
     }
 
     public void setAccessibilityEnabled(final boolean enabled) {
