@@ -9,6 +9,8 @@
 #########################################################*/
 package net.gsantner.markor.ui.hleditor;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
 import android.animation.ObjectAnimator;
 import android.content.Context;
 import android.os.Build;
@@ -305,34 +307,23 @@ public class HighlightingEditor extends AppCompatEditText {
         }
     }
 
-    public void smoothMoveCursor(final int startIndex, final int endIndex, int... arg0Delay__arg1Duration) {
-        final int delay = Math.max(1, arg0Delay__arg1Duration != null && arg0Delay__arg1Duration.length > 0 ? arg0Delay__arg1Duration[0] : 500);
-        final int duration = Math.max(1, arg0Delay__arg1Duration != null && arg0Delay__arg1Duration.length > 1 ? arg0Delay__arg1Duration[1] : 400);
+    public void smoothMoveCursor(final int startIndex, final int endIndex, int duration, Runnable after) {
+        if (!hasFocus()) {
+            requestFocus();
+        }
 
-        postDelayed(() -> {
-            if (!hasFocus()) {
-                requestFocus();
-            }
-
-            ObjectAnimator anim = ObjectAnimator.ofInt(this, "selection", startIndex, endIndex);
-            anim.setDuration(duration);
-            anim.start();
-        }, delay);
-    }
-
-    public void smoothMoveCursorToLine(final int lineNumber, int... arg0Delay__arg1Duration) {
-        final int delay = Math.max(1, arg0Delay__arg1Duration != null && arg0Delay__arg1Duration.length > 0 ? arg0Delay__arg1Duration[0] : 500);
-        final int duration = Math.max(1, arg0Delay__arg1Duration != null && arg0Delay__arg1Duration.length > 1 ? arg0Delay__arg1Duration[1] : 400);
-
-        this.postDelayed(() -> {
-            String text = getText().toString();
-            int index = StringUtils.getIndexByLineNumber(text, lineNumber);
-            if (index < 0) {
-                return;
-            }
-
-            smoothMoveCursor(0, index, 1, duration);
-        }, delay);
+        ObjectAnimator anim = ObjectAnimator.ofInt(this, "selection", startIndex, endIndex);
+        anim.setDuration(duration < 0 ? 400 : duration);
+        if (after != null) {
+            anim.addListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    super.onAnimationEnd(animation);
+                    after.run();
+                }
+            });
+        }
+        anim.start();
     }
 
     public void setAccessibilityEnabled(final boolean enabled) {

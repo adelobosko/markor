@@ -41,7 +41,6 @@ import other.de.stanetz.jpencconverter.PasswordStore;
 @SuppressWarnings({"SameParameterValue", "WeakerAccess", "FieldCanBeLocal"})
 public class AppSettings extends SharedPreferencesPropertyBackend {
     private final SharedPreferences _prefCache;
-    private final SharedPreferences _prefHistory;
     public static Boolean _isDeviceGoodHardware = null;
     private final ContextUtils _contextUtils;
 
@@ -50,7 +49,6 @@ public class AppSettings extends SharedPreferencesPropertyBackend {
     public AppSettings(Context _context) {
         super(_context);
         _prefCache = _context.getSharedPreferences("cache", Context.MODE_PRIVATE);
-        _prefHistory = _context.getSharedPreferences("history", Context.MODE_PRIVATE);
         _contextUtils = new ContextUtils(_context);
         if (_isDeviceGoodHardware == null) {
             _isDeviceGoodHardware = _contextUtils.isDeviceGoodHardware();
@@ -351,25 +349,6 @@ public class AppSettings extends SharedPreferencesPropertyBackend {
     private static final String PREF_PREFIX_VIEW_SCROLL_X = "PREF_PREFIX_VIEW_SCROLL_X";
     private static final String PREF_PREFIX_VIEW_SCROLL_Y = "PREF_PREFIX_VIEW_SCROLL_Y";
 
-    public void setLastEditPosition(File file, int pos) {
-        if (file == null || !file.exists()) {
-            return;
-        }
-        if (!file.equals(getTodoFile()) && !file.equals(getQuickNoteFile())) {
-            setInt(PREF_PREFIX_EDIT_POS_CHAR + file.getAbsolutePath(), pos, _prefCache);
-        }
-    }
-
-    public void setLastViewPosition(File file, int scrollX, int scrollY) {
-        if (file == null || !file.exists()) {
-            return;
-        }
-        if (!file.equals(getTodoFile()) && !file.equals(getQuickNoteFile())) {
-            setInt(PREF_PREFIX_VIEW_SCROLL_X + file.getAbsolutePath(), scrollX, _prefCache);
-            setInt(PREF_PREFIX_VIEW_SCROLL_Y + file.getAbsolutePath(), scrollY, _prefCache);
-        }
-    }
-
     public void setDocumentWrapState(final String path, final boolean state) {
         if (fexists(path)) {
             setBool(PREF_PREFIX_WRAP_STATE + path, state);
@@ -456,28 +435,44 @@ public class AppSettings extends SharedPreferencesPropertyBackend {
         return getBool(PREF_PREFIX_HIGHLIGHT_STATE + path, lengthOk && isHighlightingEnabled());
     }
 
-    public int getLastEditPositionChar(File file) {
-        if (file == null || !file.exists()) {
-            return -1;
+    public void setLastEditPosition(final String path, int pos) {
+        if (fexists(path)) {
+            setInt(PREF_PREFIX_EDIT_POS_CHAR + path, pos);
         }
-        if (file.equals(getTodoFile()) || file.equals(getQuickNoteFile())) {
-            return -2;
-        }
-        return getInt(PREF_PREFIX_EDIT_POS_CHAR + file.getAbsolutePath(), -3, _prefCache);
     }
 
-    public int getLastViewPositionX(File file) {
-        if (file == null || !file.exists()) {
-            return -1;
+    public int getLastEditPosition(final String path) {
+        final int _default = -1;
+        if (!fexists(path)) {
+            return _default;
+        } else {
+            return getInt(PREF_PREFIX_EDIT_POS_CHAR + path, _default);
         }
-        return getInt(PREF_PREFIX_VIEW_SCROLL_X + file.getAbsolutePath(), -3, _prefCache);
     }
 
-    public int getLastViewPositionY(File file) {
-        if (file == null || !file.exists()) {
-            return -1;
+    public void setLastViewPosition(final String path, final int scrollX, final int scrollY) {
+        if (fexists(path)) {
+            setInt(PREF_PREFIX_VIEW_SCROLL_X + path, scrollX, _prefCache);
+            setInt(PREF_PREFIX_VIEW_SCROLL_Y + path, scrollY, _prefCache);
         }
-        return getInt(PREF_PREFIX_VIEW_SCROLL_Y + file.getAbsolutePath(), -3, _prefCache);
+    }
+
+    public int getLastViewPositionX(final String path) {
+        final int _default = -1;
+        if (!fexists(path)) {
+            return _default;
+        } else {
+            return getInt(PREF_PREFIX_VIEW_SCROLL_X + path, _default);
+        }
+    }
+
+    public int getLastViewPositionY(final String path) {
+        final int _default = -1;
+        if (!fexists(path)) {
+            return _default;
+        } else {
+            return getInt(PREF_PREFIX_VIEW_SCROLL_Y + path, _default);
+        }
     }
 
     private List<String> getPopularDocumentsSorted() {

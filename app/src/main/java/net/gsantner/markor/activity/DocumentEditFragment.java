@@ -19,6 +19,7 @@ import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
@@ -64,6 +65,7 @@ import net.gsantner.opoc.preference.FontPreferenceCompat;
 import net.gsantner.opoc.ui.FilesystemViewerData;
 import net.gsantner.opoc.util.ActivityUtils;
 import net.gsantner.opoc.util.CoolExperimentalStuff;
+import net.gsantner.opoc.util.StringUtils;
 import net.gsantner.opoc.util.TextViewUndoRedo;
 
 import java.io.File;
@@ -235,6 +237,7 @@ public class DocumentEditFragment extends GsFragmentBase implements TextFormat.T
 
         // Set initial wrap state
         initDocState();
+        setDocumentViewVisibility(_isPreviewVisible);
     }
 
     @Override
@@ -315,8 +318,6 @@ public class DocumentEditFragment extends GsFragmentBase implements TextFormat.T
         _document.setFormat(_appSettings.getDocumentFormat(getPath(), _document.getFormat()));
         applyTextFormat(_document.getFormat());
         _textFormat.getTextActions().setDocument(_document);
-
-        setDocumentViewVisibility(_isPreviewVisible);
     }
 
     @Override
@@ -537,8 +538,8 @@ public class DocumentEditFragment extends GsFragmentBase implements TextFormat.T
                 }
             }, HISTORY_DELTA);
         }
-        Activity activity = getActivity();
-        if (activity != null && activity instanceof AppCompatActivity) {
+        final Activity activity = getActivity();
+        if (activity instanceof AppCompatActivity) {
             ((AppCompatActivity) activity).supportInvalidateOptionsMenu();
         }
 
@@ -684,29 +685,31 @@ public class DocumentEditFragment extends GsFragmentBase implements TextFormat.T
     }
 
     public void restoreDocumentPositions() {
-        if (!Arrays.asList(_hlEditor, _webView, _document.getFile()).contains(null) && !isTabTodoOrQuickNote()) {
-            int v;
-            if ((v = _document.getInitialLineNumber()) >= 0) { // If Intent contains line number, jump to it
-                _hlEditor.smoothMoveCursorToLine(v);
-            } else { // otherwise take settings
-                if (_isPreviewVisible) {
-                    _webView.scrollAnimatedToXY(_appSettings.getLastViewPositionX(_document.getFile()), _appSettings.getLastViewPositionY(_document.getFile()));
-                    hideSoftKeyboard();
+        final File file = _document.getFile();
+        if (!Arrays.asList(_hlEditor, _webView, file).contains(null) && !isTabTodoOrQuickNote()) {
+            if (_isPreviewVisible) {
+                _webView.scrollAnimatedToXY(_appSettings.getLastViewPositionX(file), _appSettings.getLastViewPositionY(file));
+                hideSoftKeyboard();
+            } else {
+                final int index;
+                if (_document.getInitialLineNumber() >= 0) { // If Intent contains line number, jump to it
+                    index = StringUtils.getIndexFromLineOffset(_hlEditor.getText(), _document.getInitialLineNumber(), 0);
+                } else if (_appSettings.isEditorStartOnBottom() || isDocTodoOrQuickNote()) {
+                    index = _hlEditor.length();
                 } else {
-                    if ((v = _appSettings.isEditorStartOnBottom() || isDocTodoOrQuickNote() ? _hlEditor.length() : _appSettings.getLastEditPositionChar(_document.getFile())) >= 0) {
-                        final int selPosition = v;
-                        _hlEditor.postDelayed(() -> {
-                            if (!_hlEditor.hasFocus()) {
-                                _hlEditor.requestFocus();
-                            }
-                            _hlEditor.setSelection(selPosition);
-                            new ActivityUtils(getActivity()).showSoftKeyboard().freeContextRef();
-                        }, 300);
-
-                    }
+                    index = _appSettings.getLastEditPositionChar(_document.getFile());
                 }
+
+                _hlEditor.smoothMoveCursor(0, index, -1, () -> {
+                    if (!_hlEditor.hasFocus()) {
+                        _hlEditor.requestFocus();
+                    }
+                    _hlEditor.setSelection(index);
+                    new ActivityUtils(getActivity()).showSoftKeyboard().freeContextRef();
+                });
+
+                _document.setInitialLineNumber(-1);
             }
-            _document.setInitialLineNumber(-1);
         }
     }
 
@@ -725,11 +728,8 @@ public class DocumentEditFragment extends GsFragmentBase implements TextFormat.T
     }
 
     private void hideSoftKeyboard() {
+        _hlEditor.clearFocus();
         new ActivityUtils(getActivity()).hideSoftKeyboard().freeContextRef();
-        _hlEditor.postDelayed(() -> {
-            _hlEditor.clearFocus();
-            new ActivityUtils(getActivity()).hideSoftKeyboard().freeContextRef();
-        }, 300);
     }
 
     @Override
@@ -768,18 +768,11 @@ public class DocumentEditFragment extends GsFragmentBase implements TextFormat.T
     @Override
     public void setUserVisibleHint(boolean isVisibleToUser) {
         super.setUserVisibleHint(isVisibleToUser);
-        if (isVisibleToUser && isTabTodoOrQuickNote()) {
+        if (isVisibleToUser) {
             checkReloadDisk(false);
-            if (_hlEditor != null && !_isPreviewVisible) {
-                _hlEditor.postDelayed(() -> {
-                    if (!_hlEditor.hasFocus()) {
-                        _hlEditor.requestFocus();
-                    }
-                    _hlEditor.setSelection(_hlEditor.length());
-                    new ActivityUtils(getActivity()).showSoftKeyboard().freeContextRef();
-                }, 300);
-            }
-        } else if (!isVisibleToUser && _document != null) {
+            initDocState();
+            restoreDocumentPositions();
+        } else if (_document != null) {
             saveDocument();
             hideSoftKeyboard();
         }
@@ -787,10 +780,6 @@ public class DocumentEditFragment extends GsFragmentBase implements TextFormat.T
         final Toolbar toolbar = getToolbar();
         if (toolbar != null && isVisibleToUser) {
             toolbar.setOnLongClickListener(_longClickToTopOrBottom);
-        }
-
-        if (isVisibleToUser) {
-            initDocState();
         }
     }
 
